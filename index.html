@@ -142,6 +142,14 @@ button:hover{background:#eee}
 <div class="container">
     <h1>✦ WINTER ARC TRACKER ✦</h1>
 
+    <div id="authBox" style="text-align:center;margin:0 0 14px;padding:10px;border:1px solid #888;">
+        <button id="googleSignIn" type="button">Sign in with Google</button>
+        <button id="googleSignOut" type="button" style="display:none;">Sign out</button>
+        <div id="authStatus" style="font-size:11px;margin-top:7px;color:#555;">
+            Sign in with Google to sync this tracker between your laptop and phone.
+        </div>
+    </div>
+
     <div class="info">
         Name:
         <input id="name" placeholder="Your name">
@@ -186,10 +194,40 @@ button:hover{background:#eee}
         </div>
     </div>
 
-    <button onclick="resetMonth()">Reset Month</button>
+    <button id="resetMonth" type="button">Reset Month</button>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import {
+    getDatabase,
+    ref,
+    onValue,
+    set
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyAY0ggz_05NSiMtYqaQhhoqKy7T0R96hPs",
+    authDomain: "winter-arc-cddde.firebaseapp.com",
+    projectId: "winter-arc-cddde",
+    storageBucket: "winter-arc-cddde.firebasestorage.app",
+    messagingSenderId: "488683169937",
+    appId: "1:488683169937:web:4aae24056e99f9b4b3f730",
+    measurementId: "G-RX6DPJ4W05"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const provider = new GoogleAuthProvider();
+
 const habits = [
     "LEETCODE",
     "GYM",
@@ -208,62 +246,105 @@ const days = 31;
 const key = "winterArcTrackerV3";
 
 let data = JSON.parse(localStorage.getItem(key) || "{}");
+let currentUser = null;
+let remoteReady = false;
+let unsubscribeRemote = null;
+let saveTimer = null;
 
-if (!data.habits) data.habits = {};
-habits.forEach(h => {
-    if (!data.habits[h]) data.habits[h] = {};
-});
+function normalizeData(value) {
+    const d = value && typeof value === "object" ? value : {};
+    if (!d.habits) d.habits = {};
+    habits.forEach(h => {
+        if (!d.habits[h]) d.habits[h] = {};
+    });
+    return d;
+}
 
-function save(){
+data = normalizeData(data);
+
+function localSave() {
+    localStorage.setItem(key, JSON.stringify(data));
+}
+
+function setAuthStatus(message) {
+    document.getElementById("authStatus").textContent = message;
+}
+
+function saveToCloud() {
+    if (!currentUser || !remoteReady) return;
+
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+        try {
+            await set(ref(db, `users/${currentUser.uid}/tracker`), data);
+            localSave();
+            setAuthStatus("Synced ✓ " + currentUser.email);
+        } catch (error) {
+            console.error(error);
+            setAuthStatus("Sync error: " + error.message);
+        }
+    }, 250);
+}
+
+function save() {
     data.name = document.getElementById("name").value;
     data.month = document.getElementById("month").value;
     data.target = document.getElementById("target").value;
     data.wins = document.getElementById("wins").value;
     data.areas = document.getElementById("areas").value;
-    localStorage.setItem(key, JSON.stringify(data));
+
+    localSave();
+    saveToCloud();
 }
 
-function buildTable(){
+function buildTable() {
     const tbody = document.getElementById("habitRows");
     tbody.innerHTML = "";
 
-    habits.forEach(habit => {
+    habits.forEach((habit, index) => {
         const tr = document.createElement("tr");
 
         const label = document.createElement("td");
-        label.textContent = habits.indexOf(habit)+1 + ". " + habit;
+        label.textContent = (index + 1) + ". " + habit;
         tr.appendChild(label);
 
-        for(let day=1; day<=days; day++){
+        for (let day = 1; day <= days; day++) {
             const td = document.createElement("td");
             td.className = "day";
 
-            if(data.habits[habit][day]) {
+            if (data.habits[habit][day]) {
                 td.classList.add("done");
                 td.textContent = "✓";
             }
 
             td.onclick = () => {
-                if(data.habits[habit][day]){
+                if (!currentUser) {
+                    alert("Please sign in with Google first.");
+                    return;
+                }
+
+                if (data.habits[habit][day]) {
                     delete data.habits[habit][day];
                     td.classList.remove("done");
                     td.textContent = "";
-                }else{
+                } else {
                     data.habits[habit][day] = true;
                     td.classList.add("done");
                     td.textContent = "✓";
                 }
+
                 save();
                 updateProgress();
             };
 
             tr.appendChild(td);
         }
+
         tbody.appendChild(tr);
     });
 }
 
-function updateProgress(){
+function updateProgress() {
     const container = document.getElementById("progressRows");
     container.innerHTML = "";
 
@@ -284,28 +365,120 @@ function updateProgress(){
     });
 }
 
-function loadFields(){
+function loadFields() {
     document.getElementById("name").value = data.name || "";
     document.getElementById("month").value = data.month || "";
     document.getElementById("target").value = data.target || "";
     document.getElementById("wins").value = data.wins || "";
     document.getElementById("areas").value = data.areas || "";
 
-    ["name","month","target","wins","areas"].forEach(id=>{
-        document.getElementById(id).addEventListener("input", save);
+    ["name", "month", "target", "wins", "areas"].forEach(id => {
+        document.getElementById(id).oninput = save;
     });
 }
 
-function resetMonth(){
-    if(confirm("Reset all Winter Arc progress for this month?")){
-        localStorage.removeItem(key);
-        location.reload();
+function renderAll() {
+    buildTable();
+    loadFields();
+    updateProgress();
+}
+
+async function resetMonth() {
+    if (!currentUser) {
+        alert("Please sign in with Google first.");
+        return;
+    }
+
+    if (!confirm("Reset all Winter Arc progress for this month?")) return;
+
+    data = normalizeData({});
+    localSave();
+
+    try {
+        await set(ref(db, `users/${currentUser.uid}/tracker`), data);
+        renderAll();
+        setAuthStatus("Tracker reset and synced ✓");
+    } catch (error) {
+        console.error(error);
+        setAuthStatus("Reset sync error: " + error.message);
     }
 }
 
-buildTable();
-loadFields();
-updateProgress();
+async function signIn() {
+    try {
+        setAuthStatus("Opening Google sign-in...");
+        await signInWithPopup(auth, provider);
+    } catch (error) {
+        console.error(error);
+        setAuthStatus("Sign-in failed: " + error.message);
+    }
+}
+
+async function signOutUser() {
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error(error);
+        setAuthStatus("Sign-out failed: " + error.message);
+    }
+}
+
+document.getElementById("googleSignIn").addEventListener("click", signIn);
+document.getElementById("googleSignOut").addEventListener("click", signOutUser);
+document.getElementById("resetMonth").addEventListener("click", resetMonth);
+
+onAuthStateChanged(auth, user => {
+    currentUser = user;
+    remoteReady = false;
+
+    const signInButton = document.getElementById("googleSignIn");
+    const signOutButton = document.getElementById("googleSignOut");
+
+    if (unsubscribeRemote) {
+        unsubscribeRemote();
+        unsubscribeRemote = null;
+    }
+
+    if (!user) {
+        signInButton.style.display = "inline-block";
+        signOutButton.style.display = "none";
+        setAuthStatus("Sign in with Google to sync this tracker between devices.");
+        renderAll();
+        return;
+    }
+
+    signInButton.style.display = "none";
+    signOutButton.style.display = "inline-block";
+    setAuthStatus("Signed in as " + user.email + " — loading tracker...");
+
+    const trackerRef = ref(db, `users/${user.uid}/tracker`);
+
+    unsubscribeRemote = onValue(
+        trackerRef,
+        async snapshot => {
+            const remoteData = snapshot.val();
+
+            if (remoteData) {
+                data = normalizeData(remoteData);
+                localSave();
+            } else {
+                data = normalizeData(data);
+                await set(trackerRef, data);
+                localSave();
+            }
+
+            remoteReady = true;
+            renderAll();
+            setAuthStatus("Synced ✓ " + user.email);
+        },
+        error => {
+            console.error(error);
+            setAuthStatus("Database error: " + error.message);
+        }
+    );
+});
+
+renderAll();
 </script>
 </body>
 </html>
