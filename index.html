@@ -141,7 +141,6 @@ button:hover{background:#eee}
 <body>
 <div class="container">
     <h1>✦ WINTER ARC TRACKER ✦</h1>
-
     <div id="authBox" style="text-align:center;margin:0 0 14px;padding:10px;border:1px solid #888;">
         <button id="googleSignIn" type="button">Sign in with Google</button>
         <button id="googleSignOut" type="button" style="display:none;">Sign out</button>
@@ -214,7 +213,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAY0ggz_05NSiMtYqaQhhoqKy7T0R96hPs",
+    apiKey: "AIzaSyAYogzz_O5NSiMtYqaQhhoqKy7T0R96hPs",
     authDomain: "winter-arc-cddde.firebaseapp.com",
     projectId: "winter-arc-cddde",
     storageBucket: "winter-arc-cddde.firebasestorage.app",
@@ -292,7 +291,6 @@ function save() {
     data.target = document.getElementById("target").value;
     data.wins = document.getElementById("wins").value;
     data.areas = document.getElementById("areas").value;
-
     localSave();
     saveToCloud();
 }
@@ -303,7 +301,6 @@ function buildTable() {
 
     habits.forEach((habit, index) => {
         const tr = document.createElement("tr");
-
         const label = document.createElement("td");
         label.textContent = (index + 1) + ". " + habit;
         tr.appendChild(label);
@@ -442,7 +439,7 @@ onAuthStateChanged(auth, user => {
     if (!user) {
         signInButton.style.display = "inline-block";
         signOutButton.style.display = "none";
-        setAuthStatus("Sign in with Google to sync this tracker between devices.");
+        setAuthStatus("Sign in with Google to sync this tracker between your laptop and phone.");
         renderAll();
         return;
     }
