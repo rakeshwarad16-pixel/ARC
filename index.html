@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Winter Arc Tracker</title>
+<style>
+*{box-sizing:border-box}
+body{
+    margin:0;
+    padding:18px;
+    font-family:Arial,Helvetica,sans-serif;
+    background:#fff;
+    color:#111;
+}
+.container{max-width:1100px;margin:auto}
+h1{
+    text-align:center;
+    font-family:Georgia,serif;
+    font-size:25px;
+    margin:0 0 12px;
+}
+.info{
+    text-align:center;
+    margin-bottom:12px;
+    font-size:13px;
+}
+.info input{
+    border:0;
+    border-bottom:1px solid #888;
+    width:120px;
+    font-size:13px;
+    outline:none;
+    background:transparent;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+    table-layout:fixed;
+    font-size:11px;
+}
+th,td{border:1px solid #888;text-align:center;height:31px}
+th:first-child,td:first-child{
+    width:125px;
+    text-align:left;
+    padding-left:8px;
+    font-weight:bold;
+}
+.day{
+    cursor:pointer;
+    user-select:none;
+    font-weight:bold;
+    transition:.1s;
+}
+.day:hover{background:#eee}
+.day.done{
+    background:#111;
+    color:#fff;
+}
+.day.no{
+    background:#eee;
+    color:#888;
+}
+.progress-section{
+    border:1px solid #888;
+    margin-top:14px;
+    padding:12px 14px;
+}
+.progress-title{
+    text-align:center;
+    font-family:Georgia,serif;
+    font-weight:bold;
+    font-size:16px;
+    margin-bottom:12px;
+}
+.progress-row{
+    display:grid;
+    grid-template-columns:125px 1fr 38px;
+    gap:10px;
+    align-items:center;
+    margin:7px 0;
+    font-size:11px;
+    font-weight:bold;
+}
+.bar{
+    height:16px;
+    border:1px solid #aaa;
+    background:#f3f3f3;
+}
+.fill{
+    height:100%;
+    width:0%;
+    background:#222;
+    transition:width .2s;
+}
+.percent{text-align:right}
+.note{text-align:center;color:#777;font-size:10px;margin-top:10px}
+.bottom{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    margin-top:14px;
+}
+.box{
+    border:1px solid #888;
+    min-height:135px;
+    padding:10px;
+}
+.box h3{
+    text-align:center;
+    font-size:12px;
+    margin:0 0 8px;
+}
+.box textarea{
+    width:100%;
+    height:95px;
+    border:0;
+    resize:none;
+    outline:none;
+    font-family:Arial;
+    font-size:12px;
+}
+button{
+    display:block;
+    margin:12px auto 0;
+    padding:7px 16px;
+    background:#fff;
+    border:1px solid #555;
+    border-radius:4px;
+    cursor:pointer;
+}
+button:hover{background:#eee}
+@media(max-width:900px){
+    body{padding:10px}
+    table{font-size:9px}
+    th,td{height:27px}
+    th:first-child,td:first-child{width:110px}
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+    <h1>✦ WINTER ARC TRACKER ✦</h1>
+
+    <div class="info">
+        Name:
+        <input id="name" placeholder="Your name">
+        &nbsp;&nbsp;&nbsp;
+        Month:
+        <input id="month" placeholder="Month">
+    </div>
+
+    <table id="tracker">
+        <thead>
+            <tr>
+                <th>HABITS / DAYS</th>
+                <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th>
+                <th>6</th><th>7</th><th>8</th><th>9</th><th>10</th>
+                <th>11</th><th>12</th><th>13</th><th>14</th><th>15</th>
+                <th>16</th><th>17</th><th>18</th><th>19</th><th>20</th>
+                <th>21</th><th>22</th><th>23</th><th>24</th><th>25</th>
+                <th>26</th><th>27</th><th>28</th><th>29</th><th>30</th><th>31</th>
+            </tr>
+        </thead>
+        <tbody id="habitRows"></tbody>
+    </table>
+
+    <div class="progress-section">
+        <div class="progress-title">MONTHLY PROGRESS</div>
+        <div id="progressRows"></div>
+        <div class="note">Click a day to mark ✓. Click again to remove it. Updates automatically whenever you mark a day ✓</div>
+    </div>
+
+    <div class="bottom">
+        <div class="box">
+            <h3>THIS MONTH'S TARGET</h3>
+            <textarea id="target" placeholder="Write your target..."></textarea>
+        </div>
+        <div class="box">
+            <h3>MY WINS THIS MONTH</h3>
+            <textarea id="wins" placeholder="Write your wins..."></textarea>
+        </div>
+        <div class="box">
+            <h3>AREAS TO WORK ON</h3>
+            <textarea id="areas" placeholder="Write areas to improve..."></textarea>
+        </div>
+    </div>
+
+    <button onclick="resetMonth()">Reset Month</button>
+</div>
+
+<script>
+const habits = [
+    "LEETCODE",
+    "GYM",
+    "ACADEMIC",
+    "NO JUNK FOOD",
+    "INSTAGRAM LIMIT",
+    "CODING",
+    "PROTEIN",
+    "EDITING",
+    "3L WATER",
+    "SCREEN TIME PROJECT",
+    "7 HOURS SLEEP"
+];
+
+const days = 31;
+const key = "winterArcTrackerV3";
+
+let data = JSON.parse(localStorage.getItem(key) || "{}");
+
+if (!data.habits) data.habits = {};
+habits.forEach(h => {
+    if (!data.habits[h]) data.habits[h] = {};
+});
+
+function save(){
+    data.name = document.getElementById("name").value;
+    data.month = document.getElementById("month").value;
+    data.target = document.getElementById("target").value;
+    data.wins = document.getElementById("wins").value;
+    data.areas = document.getElementById("areas").value;
+    localStorage.setItem(key, JSON.stringify(data));
+}
+
+function buildTable(){
+    const tbody = document.getElementById("habitRows");
+    tbody.innerHTML = "";
+
+    habits.forEach(habit => {
+        const tr = document.createElement("tr");
+
+        const label = document.createElement("td");
+        label.textContent = habits.indexOf(habit)+1 + ". " + habit;
+        tr.appendChild(label);
+
+        for(let day=1; day<=days; day++){
+            const td = document.createElement("td");
+            td.className = "day";
+
+            if(data.habits[habit][day]) {
+                td.classList.add("done");
+                td.textContent = "✓";
+            }
+
+            td.onclick = () => {
+                if(data.habits[habit][day]){
+                    delete data.habits[habit][day];
+                    td.classList.remove("done");
+                    td.textContent = "";
+                }else{
+                    data.habits[habit][day] = true;
+                    td.classList.add("done");
+                    td.textContent = "✓";
+                }
+                save();
+                updateProgress();
+            };
+
+            tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+    });
+}
+
+function updateProgress(){
+    const container = document.getElementById("progressRows");
+    container.innerHTML = "";
+
+    habits.forEach(habit => {
+        const completed = Object.keys(data.habits[habit] || {}).length;
+        const percent = Math.round((completed / days) * 100);
+
+        const row = document.createElement("div");
+        row.className = "progress-row";
+
+        row.innerHTML = `
+            <div>${habit}</div>
+            <div class="bar"><div class="fill" style="width:${percent}%"></div></div>
+            <div class="percent">${percent}%</div>
+        `;
+
+        container.appendChild(row);
+    });
+}
+
+function loadFields(){
+    document.getElementById("name").value = data.name || "";
+    document.getElementById("month").value = data.month || "";
+    document.getElementById("target").value = data.target || "";
+    document.getElementById("wins").value = data.wins || "";
+    document.getElementById("areas").value = data.areas || "";
+
+    ["name","month","target","wins","areas"].forEach(id=>{
+        document.getElementById(id).addEventListener("input", save);
+    });
+}
+
+function resetMonth(){
+    if(confirm("Reset all Winter Arc progress for this month?")){
+        localStorage.removeItem(key);
+        location.reload();
+    }
+}
+
+buildTable();
+loadFields();
+updateProgress();
+</script>
+</body>
+</html>
